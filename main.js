@@ -16,4 +16,14 @@ client.once('ready', () => {
     console.log(`Logged in as ${client.user.tag}!`);
 });
 
-client.login(token)
+client.on(Event.MessageContent, message => {
+
+    if(message.author.bot) return;
+
+    if (message.content === '!ping') {
+        message.channel.send('pong');
+    }
+});
+
+
+client.login(token);
