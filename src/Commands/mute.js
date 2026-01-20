@@ -18,6 +18,12 @@ module.exports = {
             description: "La raison du mute",
             required: true
         }
+        {
+            type: "string",
+            name: "time",
+            description: "durée du mute",
+            required: true
+        }
     ],
 
     async run(bot, message, args) {
@@ -29,6 +35,23 @@ module.exports = {
 
         let reason = args.getString("raison")
         if(!reason) reason = "Aucune raison fournie.";
+
+        let timeString = args.getString("time")
+        let duration = 0
+
+        if (timeString.endsWith("s")){
+            duration = parselnt(timeString)*1000
+        }
+        else if (timeString.endsWith("m")){
+            duration = parselnt(timeString)*60*1000
+        }
+        else if (timeString.endsWith("h")){
+            duration = parselnt(timeString)*60*60*1000
+        }
+        else if (timeString.endsWith("j")){
+            duration = parselnt(timeString)*24*60*60*1000
+        }
+
 
         if(message.user.id === user.id) return message.reply("Vous ne pouvez pas vous mute vous-même.")
         if((await message.guild.fetchOwner()).id === user.id) return message.reply("Vous ne pouvez pas vous mute le propriétaire du serveur.")
