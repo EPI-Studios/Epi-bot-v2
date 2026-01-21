@@ -1,29 +1,60 @@
 const Discord = require('discord.js');
+const fs = require('fs');
 
 module.exports = async (bot, interaction) => {
 
-    // On vérifie si l'interaction est de type "ApplicationCommand" 
-    // (C'est-à-dire une Slash Command comme /ping, et non un bouton ou un menu)
+    // ==================================================
+    // PARTIE 1 : GESTION DES SLASH COMMANDS (/ag, /ban...)
+    // ==================================================
     if (interaction.type === Discord.InteractionType.ApplicationCommand) {
-
-        // --- RECUPERATION DE LA COMMANDE ---
-        // On va chercher la commande dans la collection 'bot.commands' (la mémoire du bot)
-        // en utilisant le nom tapé par l'utilisateur (interaction.commandName)
+        
         let command = bot.commands.get(interaction.commandName);
+        if (!command) return interaction.reply("Erreur : Commande introuvable.");
 
-        // Sécurité : Si jamais la commande n'est pas trouvée (ex: fichier supprimé mais encore visible sur Discord), on arrête.
-        if (!command) return interaction.reply("Erreur : Cette commande semble introuvable.");
-
-        // --- EXECUTION ---
-        // On lance la fonction .run() qui se trouve dans ton fichier de commande (ex: ping.js ou ban.js)
-        // On lui transmet :
-        // 1. bot (pour avoir accès aux infos du bot)
-        // 2. interaction (pour pouvoir répondre)
-        // 3. interaction.options (les arguments : user, raison, etc.)
         try {
             await command.run(bot, interaction, interaction.options);
         } catch (error) {
-            console.error(`Erreur lors de l'exécution de la commande ${interaction.commandName}:`, error);
+            console.error(error);
+        }
+    }
+
+    // ==================================================
+    // PARTIE 2 : GESTION DES BOUTONS DE VOTE
+    // ==================================================
+    else if (interaction.isButton()) {
+
+        // On vérifie si c'est un bouton de vote (commence par "vote_")
+        if (interaction.customId.startsWith("vote_")) {
+
+            const votesFile = "./votes.json";
+            let votesDB = {};
+
+            try {
+                if (fs.existsSync(votesFile)) votesDB = JSON.parse(fs.readFileSync(votesFile, "utf8"));
+            } catch (err) { return; }
+
+            // On récupère l'ID du message sur lequel le bouton est cliqué
+            let msgId = interaction.message.id;
+
+            // Si ce message n'est pas dans la base de données, c'est que le vote est fini
+            if (!votesDB[msgId]) {
+                return interaction.reply({ content: "❌ Ce vote est terminé ou n'existe plus.", ephemeral: true });
+            }
+
+            // On détermine le choix selon l'ID du bouton
+            let choix = "";
+            if (interaction.customId === "vote_pour") choix = "pour";
+            else if (interaction.customId === "vote_contre") choix = "contre";
+            else if (interaction.customId === "vote_neutre") choix = "neutre";
+
+            // On enregistre le vote de l'utilisateur
+            votesDB[msgId].votes[interaction.user.id] = choix;
+
+            // On sauvegarde
+            fs.writeFileSync(votesFile, JSON.stringify(votesDB, null, 4));
+
+            // On confirme à l'utilisateur (Ephemeral = seul lui le voit)
+            await interaction.reply({ content: `✅ Votre vote **${choix.toUpperCase()}** a bien été pris en compte. (Vous pouvez changer d'avis en cliquant sur un autre bouton)`, ephemeral: true });
         }
     }
 }
