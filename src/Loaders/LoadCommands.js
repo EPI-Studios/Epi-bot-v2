@@ -1,28 +1,40 @@
-// On importe le module 'fs' (File System) qui permet de lire les dossiers et fichiers de ton ordinateur
 const fs = require('fs');
 
 module.exports = async bot => {
 
-    // 1. fs.readdirSync : Lit le contenu du dossier './src/Commands/'
-    // 2. .filter : On ne garde que les fichiers qui finissent par ".js" (pour éviter de charger des images ou des fichiers textes par erreur)
-    // 3. .forEach : Pour chaque fichier trouvé, on exécute le code entre accolades
-    fs.readdirSync('./src/Commands/').filter(f => f.endsWith('.js')).forEach(async file => {
+    // On lit le dossier racine "Commands"
+    fs.readdirSync('./src/Commands/').forEach(async file => {
 
-        // On importe le fichier de commande (ex: ban.js)
-        // Le `../Commands/${file}` remonte d'un dossier pour aller chercher le fichier
-        let command = require(`../Commands/${file}`);
+        // On vérifie les informations sur l'élément (est-ce un fichier ou un dossier ?)
+        const path = `./src/Commands/${file}`;
+        const stat = fs.lstatSync(path);
 
-        // Vérification de sécurité :
-        // Si le fichier n'a pas de nom (name: "ping") ou si ce n'est pas du texte, on arrête tout et on affiche une erreur.
-        // Cela t'évite de lancer un bot buggé.
-        if(!command.name || typeof command.name !== 'string') throw new Error(`Le fichier ${file} n'a pas de nom de commande valide (property .name).`);
-
-        // C'est l'étape la plus importante :
-        // On enregistre la commande dans la "Collection" du bot créée dans ton index.js (bot.commands)
-        // La clé est le nom (ex: "ban") et la valeur est tout le code du fichier.
-        bot.commands.set(command.name, command);
-
-        // Confirmation visuelle dans la console que la commande est prête
-        console.log(`Commande chargée : ${command.name}`);
-    })
+        // === CAS 1 : C'EST UN DOSSIER (ex: "AG", "Moderation") ===
+        if (stat.isDirectory()) {
+            // On lit le contenu de ce sous-dossier
+            fs.readdirSync(path).filter(f => f.endsWith('.js')).forEach(async subFile => {
+                
+                // On importe le fichier qui est DANS le sous-dossier
+                let command = require(`../Commands/${file}/${subFile}`);
+                
+                // Vérification de sécurité
+                if(!command.name || typeof command.name !== 'string') throw new Error(`Erreur : La commande dans ${subFile} n'a pas de nom valide.`);
+                
+                // On charge la commande
+                bot.commands.set(command.name, command);
+                console.log(`Commande chargée (${file}) : ${command.name}`);
+            });
+        }
+        
+        // === CAS 2 : C'EST UN FICHIER DIRECT (ex: "ban.js", "ping.js") ===
+        else if (file.endsWith('.js')) {
+            // On importe le fichier qui est à la racine
+            let command = require(`../Commands/${file}`);
+            
+            if(!command.name || typeof command.name !== 'string') throw new Error(`Erreur : La commande dans ${file} n'a pas de nom valide.`);
+            
+            bot.commands.set(command.name, command);
+            console.log(`📄 Commande chargée : ${command.name}`);
+        }
+    });
 }
