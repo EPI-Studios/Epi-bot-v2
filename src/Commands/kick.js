@@ -1,10 +1,11 @@
-const Discord = require('discord.js')
+const Discord = require("discord.js")
+const fs = require("fs") // Nécessaire pour lire le fichier logs.json
 
 module.exports = {
 
     name: "kick",
-    description: "kick un membre",
-    permission: Discord.PermissionFlagsBits.kickMembers,
+    description: "Expulser un membre du serveur",
+    permission: Discord.PermissionFlagsBits.KickMembers, // Correction de la majuscule ici
     dm: false,
     options: [
         {
@@ -15,30 +16,75 @@ module.exports = {
         }, {
             type: "string",
             name: "raison",
-            description: "La raison du kick",
-            required: true
+            description: "La raison de l'expulsion",
+            required: false // J'ai mis false pour que ce soit optionnel (plus fluide)
         }
     ],
 
     async run(bot, message, args) {
 
-        let user = args.getUser("membre")
-        if(!user) return message.reply("Impossible de trouver ce membre.")
-        let member = message.guild.members.cache.get(user.id)
-        if(!member) return message.reply("Ce membre n'est pas dans le serveur.")
+        try {
+            let user = args.getUser("membre")
+            if (!user) return message.reply("Pas de membre à kick !")
+            
+            let member = message.guild.members.cache.get(user.id)
+            if (!member) return message.reply("Ce membre n'est pas sur le serveur !")
 
-        let reason = args.getString("raison")
-        if(!reason) reason = "Aucune raison fournie.";
+            let reason = args.getString("raison")
+            if (!reason) reason = "Pas de raison fournie."
 
-        if(message.user.id === user.id) return message.reply("Vous ne pouvez pas vous kick vous-même.")
-        if((await message.guild.fetchOwner()).id === user.id) return message.reply("Vous ne pouvez pas vous kick le propriétaire du serveur.")
-        if(member && !member.kickable) return message.reply("Je ne peux pas kick ce membre car il est un administrateur et/ou modérateur.")
-        if(member && message.member.roles.highest.comparePositionTo(member.roles.highest) <= 0) return message.reply("Je ne peux pas kick ce membre car il est supérieur à moi.")
+            // --- SECURITE ---
+            if (message.user.id === user.id) return message.reply("Tu ne peux pas t'auto-kick !")
+            if ((await message.guild.fetchOwner()).id === user.id) return message.reply("Impossible de kick le propriétaire !")
+            if (!member.kickable) return message.reply("Je ne peux pas kick ce membre (Il est admin ou mon rôle est trop bas).")
+            if (message.member.roles.highest.comparePositionTo(member.roles.highest) <= 0) return message.reply("Tu es inférieur à ce membre, tu ne peux pas le kick.")
 
-        try {await user.send(`Tu as été kick du server ${message.guild.name} pour la raison suivante : \`${reason}\``)} catch(err) {}
+            // --- ACTION ---
+            
+            // 1. MP (Message Privé)
+            try {
+                await user.send(`Tu as été expulsé de ${message.guild.name} par ${message.user.tag} pour la raison : \`${reason}\``)
+            } catch (err) {}
 
-        await message.reply(`${message.user} a kick ${user.tag} pour la raison : \`${reason}\``)
+            // 2. Réponse chat
+            await message.reply(`${message.user} a expulsé ${user.tag} pour la raison : \`${reason}\``)
 
-        await member.kick(reason)
+            // 3. Kick réel
+            await member.kick(reason)
+
+
+            // --- SYSTÈME DE LOGS ---
+            // Le bot va chercher si un salon logs est configuré
+            try {
+                let logsData = JSON.parse(fs.readFileSync("./logs.json", "utf8"))
+                let logChannelId = logsData[message.guild.id]
+
+                if (logChannelId) {
+                    let logChannel = message.guild.channels.cache.get(logChannelId)
+                    if (logChannel) {
+                        // Création de la fiche (Embed)
+                        let embed = new Discord.EmbedBuilder()
+                            .setTitle("👢 Expulsion (KICK)")
+                            .setColor("Orange") // Orange pour un kick
+                            .setThumbnail(user.displayAvatarURL())
+                            .addFields(
+                                { name: "Membre expulsé", value: `${user.tag} (${user.id})`, inline: false },
+                                { name: "Modérateur", value: `${message.user} (${message.user.id})`, inline: false },
+                                { name: "Raison", value: reason, inline: false }
+                            )
+                            .setTimestamp()
+                            .setFooter({ text: bot.user.username, iconURL: bot.user.displayAvatarURL() })
+
+                        await logChannel.send({ embeds: [embed] })
+                    }
+                }
+            } catch (err) {
+                // Si le fichier logs n'existe pas ou erreur, on continue sans planter
+            }
+
+        } catch (err) {
+            console.log(err)
+            return message.reply("Une erreur est survenue lors du kick.")
+        }
     }
 }
