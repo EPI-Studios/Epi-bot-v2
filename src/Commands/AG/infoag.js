@@ -92,8 +92,9 @@ module.exports = {
             let collector = message.channel.createMessageCollector({
               filter: (m) => m.author.id === userId,
             });
-            collector.on("collect", (message) => {
+            collector.on("collect", async (message) => {
               resolve(message);
+              await message.delete();
               collector.stop();
             });
           });
